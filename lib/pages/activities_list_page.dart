@@ -3,92 +3,60 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/activity.dart';
 import '../providers.dart';
-import '../widgets/activity_controls.dart';
+import '../providers_timer.dart';
 import 'activity_detail_page.dart';
-import 'create_activity_page.dart';
 
-class ActivitiesListPage extends ConsumerStatefulWidget {
+class ActivitiesListPage extends ConsumerWidget {
   const ActivitiesListPage({super.key});
 
   @override
-  ConsumerState<ActivitiesListPage> createState() => _ActivitiesListPageState();
-}
-
-class _ActivitiesListPageState extends ConsumerState<ActivitiesListPage> {
-  @override
-  Widget build(BuildContext context) {
-    final activitiesAsync = ref.watch(activitiesProvider);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(dbProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mes activités'),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
+      appBar: AppBar(title: const Text('Habits Timer')),
+      floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final created = await Navigator.of(context).push<bool>(
-            MaterialPageRoute(builder: (_) => const CreateActivityPage()),
-          );
-          // le provider est basé sur ChangeNotifier => pas besoin de setState
-          if (created == true && mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Activité créée')),
-            );
+          final created = await Navigator.of(context).pushNamed('/create');
+          // Rien à faire ici : la liste vient d'un Stream.
+          // Pas de db.notifyListeners(): DatabaseService n’est pas un ChangeNotifier.
+          if (created == true) {
+            // Optionnel : on peut simplement laisser le Stream rafraîchir l’écran.
           }
         },
-        icon: const Icon(Icons.add),
-        label: const Text('Ajouter'),
+        child: const Icon(Icons.add),
       ),
-      body: activitiesAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, st) => Center(child: Text('Erreur : $e')),
-        data: (List<Activity> activities) {
-          if (activities.isEmpty) {
-            return const Center(child: Text('Aucune activité pour le moment.'));
+      body: StreamBuilder<List<Activity>>(
+        stream: db.watchActivities(),
+        builder: (context, snap) {
+          final items = snap.data ?? const <Activity>[];
+          if (items.isEmpty) {
+            return const Center(child: Text('Aucune activité pour le moment'));
           }
           return ListView.separated(
-            padding: const EdgeInsets.all(12),
-            itemCount: activities.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (context, index) {
-              final a = activities[index];
-              final base = a.color;
-              final bg = base.withValues(alpha: 0.12);
-
-              return InkWell(
+              final a = items[index];
+              final elapsed = ref.watch(elapsedStreamProvider(a.id.toString()));
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: a.color.withValues(alpha: 0.15),
+                  child: Text(a.emoji),
+                ),
+                title: Text(a.name),
+                subtitle: elapsed.when(
+                  data: (d) =>
+                      Text("${d.inMinutes}m ${(d.inSeconds % 60).toString().padLeft(2, '0')}s"),
+                  loading: () => const Text("…"),
+                  error: (_, __) => const Text("—"),
+                ),
+                trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ActivityDetailPage(activity: a),
-                    ),
+                    MaterialPageRoute(builder: (_) => ActivityDetailPage(activity: a)),
                   );
                 },
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: bg,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: base.withValues(alpha: 0.35),
-                    ),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Row(
-                    children: [
-                      Text(a.emoji, style: const TextStyle(fontSize: 22)),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          a.name,
-                          style: Theme.of(context).textTheme.titleMedium,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      // Contrôles (start / pause / stop)
-                      ActivityControls(activityId: a.id),
-                    ],
-                  ),
-                ),
               );
             },
           );

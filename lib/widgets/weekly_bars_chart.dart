@@ -1,56 +1,58 @@
-﻿import 'package:fl_chart/fl_chart.dart';
+﻿// lib/widgets/weekly_bars_chart.dart
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
-import '../models/stats.dart';
-
+/// Graphe simple : minutes par jour d'une semaine.
+/// [data] : Map<DateTime, int> (doit contenir au moins les 7 derniers jours).
 class WeeklyBarsChart extends StatelessWidget {
-  final List<DailyStat> stats; // 7 elements
-  const WeeklyBarsChart({super.key, required this.stats});
+  const WeeklyBarsChart({super.key, required this.data});
+
+  final Map<DateTime, int> data;
 
   @override
   Widget build(BuildContext context) {
-    final maxVal = (stats.map((d) => d.minutes).fold<int>(0, (a, b) => a > b ? a : b)).clamp(1, 9999);
-    final df = DateFormat.E(Localizations.localeOf(context).languageCode);
+    final now = DateTime.now();
+    final monday = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+    final days = List<DateTime>.generate(7, (i) => monday.add(Duration(days: i)));
+    final values = days.map((d) => data[_day(d)] ?? 0).toList();
 
-    return BarChart(
-      BarChartData(
-        alignment: BarChartAlignment.spaceAround,
-        borderData: FlBorderData(show: false),
-        gridData: FlGridData(show: false),
-        titlesData: FlTitlesData(
-          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 18,
-              getTitlesWidget: (val, meta) {
-                final i = val.toInt();
-                if (i < 0 || i >= stats.length) return const SizedBox.shrink();
-                final label = df.format(stats[i].date);
-                return Text(label, style: const TextStyle(fontSize: 10));
-              },
+    return AspectRatio(
+      aspectRatio: 1.8,
+      child: BarChart(
+        BarChartData(
+          alignment: BarChartAlignment.spaceAround,
+          gridData: FlGridData(show: true),
+          borderData: FlBorderData(show: false),
+          titlesData: FlTitlesData(
+            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 32)),
+            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                getTitlesWidget: (v, meta) {
+                  final idx = v.toInt();
+                  if (idx < 0 || idx > 6) return const SizedBox.shrink();
+                  const labels = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(labels[idx]),
+                  );
+                },
+              ),
+            ),
+          ),
+          barGroups: List.generate(
+            7,
+                (i) => BarChartGroupData(
+              x: i,
+              barRods: [BarChartRodData(toY: values[i].toDouble())],
             ),
           ),
         ),
-        barGroups: [
-          for (int i = 0; i < stats.length; i++)
-            BarChartGroupData(
-              x: i,
-              barRods: [
-                BarChartRodData(
-                  toY: stats[i].minutes.toDouble(),
-                  width: 18,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ],
-            ),
-        ],
-        maxY: maxVal.toDouble() * 1.2,
       ),
     );
   }
+
+  DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
 }

@@ -1,27 +1,52 @@
-﻿import 'package:habits_timer/services/stats_service.dart';
-import 'package:habits_timer/services/database_service.dart';
+﻿// lib/services/stats_heatmap_extension.dart
+import 'dart:math';
+import 'stats_service.dart';
 
-/// Extension "Heatmap" sur StatsService.
-/// Fournit les minutes par jour sur un intervalle [from..to] inclus.
-extension StatsHeatmapExt on StatsService {
-  /// Retourne une map Date -> minutes effectives sur cette journée
-  /// (sessions - pauses + session en cours si aujourd’hui).
-  Future<Map<DateTime, int>> dailyMinutesRange({
-    required String activityId,
-    required DateTime from,
-    required DateTime to,
-  }) async {
-    // Normalise aux minuits, et boucle jour par jour.
-    final start = DateTime(from.year, from.month, from.day);
-    final end = DateTime(to.year, to.month, to.day);
+extension HeatmapHelpers on StatsService {
+  Future<Map<DateTime, int>> lastNDays(String activityUid,
+      {required int days}) async {
+    final now = DateTime.now();
+    final sessions = await db.listSessionsByActivity(activityUid);
+    final byDate = <DateTime, int>{};
 
-    final map = <DateTime, int>{};
-    for (DateTime d = start; !d.isAfter(end); d = d.add(const Duration(days: 1))) {
-      // On délègue au calcul fiable du DatabaseService qui gère
-      // sessions, pauses et éventuelle exécution en cours.
-      final minutes = db.effectiveMinutesOnDay(activityId, d);
-      map[d] = minutes;
+    for (final s in sessions) {
+      final startAt = s.startedAt;
+      final endAt = s.endedAt ?? now;
+
+      DateTime cur = startAt;
+      while (!cur.isAfter(endAt)) {
+        final dayStart = DateTime(cur.year, cur.month, cur.day);
+        final dayEnd = dayStart.add(const Duration(days: 1));
+        final segStart = cur.isBefore(dayStart) ? dayStart : cur;
+        final segEnd = endAt.isBefore(dayEnd) ? endAt : dayEnd;
+
+        var minutes = segEnd.difference(segStart).inMinutes;
+
+        final pauses = await db.listPausesBySession(s.id);
+        for (final p in pauses) {
+          final pStart = p.startedAt;
+          final pEnd = p.endedAt ?? segEnd;
+          final overlapStart = pStart.isAfter(segStart) ? pStart : segStart;
+          final overlapEnd = pEnd.isBefore(segEnd) ? pEnd : segEnd;
+          if (overlapEnd.isAfter(overlapStart)) {
+            minutes -= overlapEnd.difference(overlapStart).inMinutes;
+          }
+        }
+
+        byDate.update(dayStart, (v) => v + max(0, minutes),
+            ifAbsent: () => max(0, minutes));
+        cur = dayEnd;
+      }
     }
-    return map;
+
+    // remplissage des jours vides
+    for (int i = 0; i < days; i++) {
+      final d = DateTime(now.year, now.month, now.day)
+          .subtract(Duration(days: i));
+      byDate.putIfAbsent(DateTime(d.year, d.month, d.day), () => 0);
+    }
+    final sorted = Map.fromEntries(
+        byDate.entries.toList()..sort((a, b) => a.key.compareTo(b.key)));
+    return sorted;
   }
 }

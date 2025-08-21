@@ -1,300 +1,232 @@
 ﻿import 'dart:async';
 import 'package:flutter/material.dart';
-
 import '../models/activity.dart';
+import '../models/session.dart';
+import '../models/pause.dart';
+import '../models/stats.dart';
 
-class DbPause {
-  final DateTime startAt;
-  DateTime? endAt;
-  DbPause({required this.startAt, this.endAt});
-  bool get isOpen => endAt == null;
+/// Service en mémoire (remplace temporairement Isar).
+class DatabaseService {
+  DatabaseService();
 
-  Duration durationUntil(DateTime t) {
-    final end = endAt ?? t;
-    return end.difference(startAt);
-  }
-}
+  final List<Activity> _activities = [];
+  final List<Session> _sessions = [];
+  final List<Pause> _pauses = [];
 
-class DbSession {
-  final String id;
-  final String activityId;
-  final DateTime startAt;
-  final DateTime endAt;
-  final List<DbPause> pauses;
-
-  DbSession({
-    required this.id,
-    required this.activityId,
-    required this.startAt,
-    required this.endAt,
-    required this.pauses,
-  });
-
-  int effectiveMinutes() {
-    final total = endAt.difference(startAt);
-    final paused = pauses.fold<Duration>(
-      Duration.zero,
-          (acc, p) => acc + p.durationUntil(endAt),
-    );
-    final eff = total - paused;
-    return eff.inMinutes < 0 ? 0 : eff.inMinutes;
-  }
-}
-
-class _RunState {
-  final String activityId;
-  final DateTime sessionStart;
-  DateTime? lastResume;          // null si en pause
-  Duration accumulated;          // temps cumulé hors pause
-  final List<DbPause> pauses;    // pauses (la dernière peut être ouverte)
-
-  _RunState({
-    required this.activityId,
-    required this.sessionStart,
-    required this.lastResume,
-    required this.accumulated,
-    required this.pauses,
-  });
-
-  bool get isPaused => lastResume == null;
-
-  Duration effectiveElapsedAt(DateTime t) {
-    var d = accumulated;
-    if (!isPaused && lastResume != null) {
-      d += t.difference(lastResume!);
+  // ------ Activities ------
+  Stream<List<Activity>> watchActivities() async* {
+    while (true) {
+      yield List<Activity>.unmodifiable(_activities);
+      await Future.delayed(const Duration(milliseconds: 500));
     }
-    return d;
   }
-}
-
-class DatabaseService extends ChangeNotifier {
-  // -------------------- Activités --------------------
-  final Map<String, Activity> _activities = {};
-  List<Activity> get activities => _activities.values.toList(growable: false);
-
-  Future<List<Activity>> getActivities() async => activities;
 
   Future<Activity> createActivity({
     required String name,
     required String emoji,
-    required Color color,
-    int? dailyGoalMinutes,
-    int? weeklyGoalMinutes,
-    int? monthlyGoalMinutes,
-    int? yearlyGoalMinutes,
+    required int colorValue,
+    int dailyGoalMinutes = 0,
+    int weeklyGoalMinutes = 0,
+    int monthlyGoalMinutes = 0,
+    int yearlyGoalMinutes = 0,
   }) async {
-    final id = DateTime.now().microsecondsSinceEpoch.toString();
     final a = Activity(
-      id: id,
+      id: UniqueKey().hashCode.toString(),
       name: name,
       emoji: emoji,
-      color: color,
-      dailyGoalMinutes: dailyGoalMinutes,
-      weeklyGoalMinutes: weeklyGoalMinutes,
-      monthlyGoalMinutes: monthlyGoalMinutes,
-      yearlyGoalMinutes: yearlyGoalMinutes,
+      colorValue: colorValue,
     );
-    _activities[id] = a;
-    notifyListeners();
+    _activities.add(a);
     return a;
   }
 
-  Future<void> updateActivity(Activity updated) async {
-    _activities[updated.id] = updated;
-    notifyListeners();
-  }
+  // ------ Timer state ------
+  bool isRunningNow({required String activityId}) =>
+      _sessions.any((s) => s.activityId == activityId && s.endedAt == null);
 
-  // -------------------- Sessions & historique --------------------
-  final Map<String, _RunState> _runs = {};          // par activityId
-  final Map<String, List<DbSession>> _history = {}; // par activityId
-
-  List<DbSession> sessionsByActivity(String activityId) =>
-      List.unmodifiable(_history[activityId] ?? const []);
-
-  // === Wrappers legacy (attendus par ton code existant) ==========
-  List<DbSession> listSessionsByActivity(String activityId) => sessionsByActivity(activityId);
-
-  List<DbPause> listPausesBySession(String activityId, String sessionId) {
-    final s = (_history[activityId] ?? const []).firstWhere(
-          (e) => e.id == sessionId,
-      orElse: () => DbSession(
-        id: '_missing',
-        activityId: activityId,
-        startAt: DateTime.now(),
-        endAt: DateTime.now(),
-        pauses: const [],
-      ),
+  bool isPausedNow({required String activityId}) {
+    final s = _sessions.lastWhere(
+          (s) => s.activityId == activityId && s.endedAt == null,
+      orElse: () => Session(id: '', activityId: '', startedAt: DateTime(0)),
     );
-    return List.unmodifiable(s.pauses);
-  }
-  // ===============================================================
-
-  bool isRunning(String activityId) => _runs.containsKey(activityId);
-  bool isPaused (String activityId) => _runs[activityId]?.isPaused ?? false;
-
-  DateTime? currentSessionStart(String activityId) =>
-      _runs[activityId]?.sessionStart;
-
-  Duration runningElapsed(String activityId) {
-    final r = _runs[activityId];
-    if (r == null) return Duration.zero;
-    return r.effectiveElapsedAt(DateTime.now());
+    if (s.id.isEmpty) return false;
+    return _pauses.any((p) => p.sessionId == s.id && p.endedAt == null);
   }
 
-  Future<void> start(String activityId) async {
+  Duration runningElapsedNow({required String activityId}) {
+    final s = _sessions.lastWhere(
+          (s) => s.activityId == activityId && s.endedAt == null,
+      orElse: () => Session(id: '', activityId: '', startedAt: DateTime(0)),
+    );
+    if (s.id.isEmpty) return Duration.zero;
     final now = DateTime.now();
-    final r = _runs[activityId];
-    if (r == null) {
-      _runs[activityId] = _RunState(
-        activityId: activityId,
-        sessionStart: now,
-        lastResume: now,
-        accumulated: Duration.zero,
-        pauses: [],
-      );
-    } else {
-      if (r.isPaused) {
-        r.lastResume = now; // reprise
-      }
-      // sinon déjà en cours → noop
+    var total = now.difference(s.startedAt);
+    final pauses = _pauses.where((p) => p.sessionId == s.id);
+    for (final p in pauses) {
+      final end = p.endedAt ?? now;
+      total -= end.difference(p.startedAt);
     }
-    notifyListeners();
+    return total.isNegative ? Duration.zero : total;
   }
 
-  Future<void> togglePause(String activityId) async {
-    final r = _runs[activityId];
-    if (r == null) return;
-    final now = DateTime.now();
-
-    if (r.isPaused) {
-      // reprise
-      final last = r.pauses.isNotEmpty ? r.pauses.last : null;
-      if (last != null && last.isOpen) last.endAt = now;
-      r.lastResume = now;
-    } else {
-      // mise en pause
-      if (r.lastResume != null) {
-        r.accumulated += now.difference(r.lastResume!);
-      }
-      r.lastResume = null;
-      r.pauses.add(DbPause(startAt: now));
-    }
-    notifyListeners();
-  }
-
-  Future<void> stop(String activityId) async {
-    final r = _runs[activityId];
-    if (r == null) return;
-    final now = DateTime.now();
-
-    if (!r.isPaused && r.lastResume != null) {
-      r.accumulated += now.difference(r.lastResume!);
-    }
-    if (r.isPaused && r.pauses.isNotEmpty && r.pauses.last.isOpen) {
-      r.pauses.last.endAt = now;
-    }
-
-    final s = DbSession(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
+  Future<void> start({required String activityId}) async {
+    if (isRunningNow(activityId: activityId)) return;
+    _sessions.add(Session(
+      id: UniqueKey().hashCode.toString(),
       activityId: activityId,
-      startAt: r.sessionStart,
-      endAt: now,
-      pauses: List<DbPause>.from(r.pauses),
+      startedAt: DateTime.now(),
+    ));
+  }
+
+  Future<void> togglePause({required String activityId}) async {
+    if (!isRunningNow(activityId: activityId)) return;
+    final s = _sessions.lastWhere((s) => s.activityId == activityId && s.endedAt == null);
+    final openPause = _pauses.lastWhere(
+          (p) => p.sessionId == s.id && p.endedAt == null,
+      orElse: () => Pause(id: '', sessionId: '', startedAt: DateTime(0)),
     );
-    final list = _history.putIfAbsent(activityId, () => []);
-    list.add(s);
-
-    _runs.remove(activityId);
-    notifyListeners();
+    if (openPause.id.isEmpty) {
+      _pauses.add(Pause(
+        id: UniqueKey().hashCode.toString(),
+        sessionId: s.id,
+        startedAt: DateTime.now(),
+      ));
+    } else {
+      openPause.endedAt = DateTime.now();
+    }
   }
 
-  // -------------------- Aide stats --------------------
-  int effectiveMinutes(DbSession s) => s.effectiveMinutes();
+  Future<void> stop({required String activityId}) async {
+    if (!isRunningNow(activityId: activityId)) return;
+    final s = _sessions.lastWhere((s) => s.activityId == activityId && s.endedAt == null);
+    final openPause = _pauses.lastWhere(
+          (p) => p.sessionId == s.id && p.endedAt == null,
+      orElse: () => Pause(id: '', sessionId: '', startedAt: DateTime(0)),
+    );
+    if (openPause.id.isNotEmpty) {
+      openPause.endedAt = DateTime.now();
+    }
+    s.endedAt = DateTime.now();
+  }
 
-  int effectiveMinutesOnDay(String activityId, DateTime day) {
-    final dayStart = DateTime(day.year, day.month, day.day);
-    final dayEnd   = dayStart.add(const Duration(days: 1));
+  // ------ Queries ------
+  Future<List<Session>> listSessionsByActivity(String activityId) async {
+    final list = _sessions.where((s) => s.activityId == activityId).toList()
+      ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
+    return list;
+  }
 
+  Future<List<Pause>> listPausesBySession(String sessionId) async {
+    final list = _pauses.where((p) => p.sessionId == sessionId).toList()
+      ..sort((a, b) => a.startedAt.compareTo(b.startedAt));
+    return list;
+  }
+
+  Duration effectiveDurationFor(Session s) {
+    final end = s.endedAt ?? DateTime.now();
+    var total = end.difference(s.startedAt);
+    final pauses = _pauses.where((p) => p.sessionId == s.id);
+    for (final p in pauses) {
+      final pEnd = p.endedAt ?? end;
+      total -= pEnd.difference(p.startedAt);
+    }
+    return total.isNegative ? Duration.zero : total;
+  }
+
+  Future<int> effectiveMinutesOnDay(String activityId, DateTime day) async {
+    final startDay = DateTime(day.year, day.month, day.day);
+    final endDay = startDay.add(const Duration(days: 1));
     int minutes = 0;
+    final sessions = await listSessionsByActivity(activityId);
+    for (final s in sessions) {
+      final sStart = s.startedAt;
+      final sEnd = s.endedAt ?? DateTime.now();
+      final overlapStart = sStart.isAfter(startDay) ? sStart : startDay;
+      final overlapEnd = sEnd.isBefore(endDay) ? sEnd : endDay;
+      if (!overlapEnd.isAfter(overlapStart)) continue;
 
-    for (final s in sessionsByActivity(activityId)) {
-      final overlapStart = s.startAt.isBefore(dayStart) ? dayStart : s.startAt;
-      final overlapEnd   = s.endAt.isAfter(dayEnd) ? dayEnd : s.endAt;
-
-      if (overlapEnd.isAfter(overlapStart)) {
-        var dur = overlapEnd.difference(overlapStart);
-        for (final p in s.pauses) {
-          final ps = p.startAt.isBefore(dayStart) ? dayStart : p.startAt;
-          final pe = (p.endAt ?? s.endAt).isAfter(dayEnd) ? dayEnd : (p.endAt ?? s.endAt);
-          if (pe.isAfter(ps)) {
-            dur -= pe.difference(ps);
-          }
+      var dur = overlapEnd.difference(overlapStart);
+      final pauses = _pauses.where((p) => p.sessionId == s.id);
+      for (final p in pauses) {
+        final pStart = p.startedAt;
+        final pEnd = p.endedAt ?? sEnd;
+        final poStart = pStart.isAfter(startDay) ? pStart : startDay;
+        final poEnd = pEnd.isBefore(endDay) ? pEnd : endDay;
+        if (poEnd.isAfter(poStart)) {
+          dur -= poEnd.difference(poStart);
         }
-        minutes += dur.inMinutes;
       }
+      minutes += dur.inMinutes;
     }
-
-    final r = _runs[activityId];
-    if (r != null) {
-      final now = DateTime.now();
-      final runningEnd = now.isAfter(dayEnd) ? dayEnd : now;
-      final runningStart = r.sessionStart.isBefore(dayStart) ? dayStart : r.sessionStart;
-
-      if (runningEnd.isAfter(runningStart)) {
-        var dur = runningEnd.difference(runningStart);
-        for (final p in r.pauses) {
-          final ps = p.startAt.isBefore(dayStart) ? dayStart : p.startAt;
-          final pe = (p.endAt ?? now).isAfter(dayEnd) ? dayEnd : (p.endAt ?? now);
-          if (pe.isAfter(ps)) {
-            dur -= pe.difference(ps);
-          }
-        }
-        final live = r.effectiveElapsedAt(now).inMinutes;
-        minutes += dur.inMinutes.clamp(0, live);
-      }
-    }
-
-    return minutes < 0 ? 0 : minutes;
+    return minutes;
   }
 
-  List<int> hourlyToday(String activityId) {
+  Future<List<int>> dailyMinutesRange(String activityId, {required int days}) async {
+    final now = DateTime.now();
+    final List<int> out = [];
+    for (int i = 0; i < days; i++) {
+      final d = DateTime(now.year, now.month, now.day).subtract(Duration(days: i));
+      out.add(await effectiveMinutesOnDay(activityId, d));
+    }
+    return out;
+  }
+
+  Future<List<DailyStat>> lastNDays(String activityId, {required int days}) async {
+    final now = DateTime.now();
+    final List<DailyStat> out = [];
+    for (int i = 0; i < days; i++) {
+      final d = DateTime(now.year, now.month, now.day).subtract(Duration(days: i));
+      final m = await effectiveMinutesOnDay(activityId, d);
+      out.add(DailyStat(d, m));
+    }
+    return out;
+  }
+
+  Future<List<HourlyBucket>> hourlyToday(String activityId) async {
     final today = DateTime.now();
-    final startDay = DateTime(today.year, today.month, today.day);
-    final endDay   = startDay.add(const Duration(days: 1));
+    final start = DateTime(today.year, today.month, today.day);
+    final end = start.add(const Duration(days: 1));
     final buckets = List<int>.filled(24, 0);
 
-    void addRange(DateTime a, DateTime b, List<DbPause> pauses) {
-      var start = a.isBefore(startDay) ? startDay : a;
-      var end   = b.isAfter(endDay) ? endDay : b;
-      if (!end.isAfter(start)) return;
+    final sessions = await listSessionsByActivity(activityId);
+    for (final s in sessions) {
+      final sStart = s.startedAt;
+      final sEnd = s.endedAt ?? DateTime.now();
+      DateTime segStart = sStart.isAfter(start) ? sStart : start;
+      DateTime segEnd = sEnd.isBefore(end) ? sEnd : end;
+      if (!segEnd.isAfter(segStart)) continue;
 
-      DateTime cursor = start;
-      while (cursor.isBefore(end)) {
-        final next = cursor.add(const Duration(minutes: 1));
-        bool inPause = false;
-        for (final p in pauses) {
-          final ps = p.startAt.isBefore(startDay) ? startDay : p.startAt;
-          final pe = (p.endAt ?? end).isAfter(endDay) ? endDay : (p.endAt ?? end);
-          if (next.isAfter(ps) && cursor.isBefore(pe)) {
-            inPause = true;
-            break;
-          }
+      final pauses = _pauses.where((p) => p.sessionId == s.id);
+      final segments = <DateTime>[];
+      segments.add(segStart);
+      for (final p in pauses) {
+        final pStart = p.startedAt;
+        final pEnd = p.endedAt ?? sEnd;
+        if (pEnd.isAfter(segStart) && pStart.isBefore(segEnd)) {
+          if (pStart.isAfter(segStart)) segments.add(pStart);
+          if (pEnd.isBefore(segEnd)) segments.add(pEnd);
         }
-        if (!inPause) {
-          buckets[cursor.hour] += 1;
-        }
-        cursor = next;
+      }
+      segments.add(segEnd);
+      segments.sort();
+
+      for (int i = 0; i < segments.length - 1; i += 2) {
+        final a = segments[i];
+        final b = segments[i + 1];
+        _accumulateByHour(a, b, buckets);
       }
     }
 
-    for (final s in sessionsByActivity(activityId)) {
-      addRange(s.startAt, s.endAt, s.pauses);
+    return [for (int h = 0; h < 24; h++) HourlyBucket(h, buckets[h])];
+  }
+
+  void _accumulateByHour(DateTime a, DateTime b, List<int> buckets) {
+    DateTime cur = a;
+    while (cur.isBefore(b)) {
+      final nextHour = DateTime(cur.year, cur.month, cur.day, cur.hour).add(const Duration(hours: 1));
+      final end = b.isBefore(nextHour) ? b : nextHour;
+      buckets[cur.hour] += end.difference(cur).inMinutes;
+      cur = end;
     }
-    final r = _runs[activityId];
-    if (r != null) {
-      final now = DateTime.now();
-      addRange(r.sessionStart, now, r.pauses);
-    }
-    return buckets;
   }
 }

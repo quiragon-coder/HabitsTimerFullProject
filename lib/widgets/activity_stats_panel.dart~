@@ -1,0 +1,35 @@
+﻿// lib/widgets/activity_stats_panel.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers_stats.dart';
+
+class ActivityStatsPanel extends ConsumerWidget {
+  final String activityId;
+  const ActivityStatsPanel({super.key, required this.activityId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final m = ref.watch(lastNDaysMapProvider(LastNDaysArgs(activityId, days: 30)));
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: m.when(
+          loading: () => const SizedBox(height: 64, child: Center(child: CircularProgressIndicator())),
+          error: (e, _) => Text('Erreur: $e'),
+          data: (map) {
+            // simple tiny bar: sum and draw progress line
+            final total = map.values.fold<int>(0, (a, b) => a + b);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Derniers 30 jours: ${total}m'),
+                const SizedBox(height: 8),
+                LinearProgressIndicator(value: (total / (30 * 60)).clamp(0.0, 1.0)),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
