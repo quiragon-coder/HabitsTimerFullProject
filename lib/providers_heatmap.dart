@@ -1,9 +1,13 @@
-﻿// lib/providers_heatmap.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'providers_stats.dart';
+import '../services/database_service_contract.dart';
 
-/// Re-exports a map provider for heatmaps (date → minutes).
-final heatmapDataProvider =
-FutureProvider.family<Map<DateTime, int>, LastNDaysArgs>((ref, args) {
-  return ref.read(lastNDaysMapProvider(args).future);
+class LastNDaysArgs {
+  LastNDaysArgs({required this.activityId, required this.days});
+  final int activityId;
+  final int days;
+  String get uid => activityId.toString();
+}
+
+final lastNDaysMapProvider = FutureProvider.family<Map<DateTime, int>, LastNDaysArgs>((ref, args) {
+  return ref.read(dbProvider).lastNDaysMap(args.uid, days: args.days);
 });

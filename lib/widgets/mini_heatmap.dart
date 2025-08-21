@@ -1,9 +1,6 @@
-// lib/widgets/mini_heatmap.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../providers_stats.dart';
-import 'heatmap.dart';
+import '../providers/providers_heatmap.dart';
 
 class MiniHeatmap extends ConsumerWidget {
   const MiniHeatmap({
@@ -19,17 +16,42 @@ class MiniHeatmap extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final args = LastNDaysArgs(activityUid: activityUid, days: days);
-    final asyncMap = ref.watch(lastNDaysMapProvider(args));
-
-    return asyncMap.when(
-      data: (map) => Heatmap(data: map, baseColor: baseColor),
-      loading: () => const SizedBox(
-        height: 120,
-        child: Center(child: CircularProgressIndicator()),
+    final mapAsync = ref.watch(lastNDaysMapProvider(LastNDaysArgs(activityId: int.parse(activityUid), days: days)));
+    return mapAsync.when(
+      loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+      error: (e, _) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text('Erreur heatmap: $e'),
       ),
-      error: (e, st) =>
-          SizedBox(height: 120, child: Center(child: Text("Erreur: $e"))),
+      data: (map) {
+        if (map.isEmpty) return const Padding(padding: EdgeInsets.all(16), child: Text('Pas encore de données.'));
+        final keys = map.keys.toList()..sort();
+        final maxVal = map.values.fold<int>(0, (p, n) => n > p ? n : p);
+        Color shade(int v) {
+          if (maxVal == 0) return baseColor.withOpacity(0.1);
+          final t = (v / maxVal).clamp(0.15, 1.0);
+          return baseColor.withOpacity(t);
+        }
+        return Padding(
+          padding: const EdgeInsets.all(8),
+          child: Wrap(
+            spacing: 4, runSpacing: 4,
+            children: [
+              for (final d in keys)
+                Tooltip(
+                  message: '${d.year}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')} : ${map[d]} min',
+                  child: Container(
+                    width: 12, height: 12,
+                    decoration: BoxDecoration(
+                      color: shade(map[d] ?? 0),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                )
+            ],
+          ),
+        );
+      },
     );
   }
 }

@@ -1,64 +1,50 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers.dart';
+import '../providers/providers_timer.dart';
 
 class CreateActivityPage extends ConsumerStatefulWidget {
   const CreateActivityPage({super.key});
-
   @override
   ConsumerState<CreateActivityPage> createState() => _CreateActivityPageState();
 }
 
 class _CreateActivityPageState extends ConsumerState<CreateActivityPage> {
-  final _formKey = GlobalKey<FormState>();
+  final _form = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
-  final _emojiCtrl = TextEditingController(text: '🎯');
-  Color _color = const Color(0xFF7367F0);
+  String _emoji = '🎯';
+  Color _color = const Color(0xFF6C63FF);
 
   @override
   void dispose() {
     _nameCtrl.dispose();
-    _emojiCtrl.dispose();
     super.dispose();
-  }
-
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    final db = ref.read(dbProvider);
-    await db.createActivity(
-      name: _nameCtrl.text.trim(),
-      emoji: _emojiCtrl.text.trim().isEmpty ? '🎯' : _emojiCtrl.text.trim(),
-      // DatabaseService attend colorValue (int ARGB)
-      colorValue: _color.value,
-      dailyGoalMinutes: 0,
-      weeklyGoalMinutes: 0,
-      monthlyGoalMinutes: 0,
-      yearlyGoalMinutes: 0,
-    );
-    if (!mounted) return;
-    Navigator.of(context).pop(true);
   }
 
   @override
   Widget build(BuildContext context) {
+    final db = ref.watch(dbProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Nouvelle activité')),
+      appBar: AppBar(title: const Text('Créer une activité')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          key: _form,
+          child: ListView(
             children: [
               TextFormField(
                 controller: _nameCtrl,
                 decoration: const InputDecoration(labelText: 'Nom'),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Nom obligatoire' : null,
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'Nom requis' : null,
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _emojiCtrl,
-                decoration: const InputDecoration(labelText: 'Emoji'),
+              Wrap(
+                spacing: 8, runSpacing: 8,
+                children: ['🎯','✏️','📚','🏃','🎸','💻','🧘','📖','🎮','🍳']
+                    .map((e) => ChoiceChip(
+                      label: Text(e), selected: _emoji == e,
+                      onSelected: (_) => setState(() => _emoji = e),
+                    ))
+                    .toList(),
               ),
               const SizedBox(height: 12),
               Row(
@@ -67,49 +53,75 @@ class _CreateActivityPageState extends ConsumerState<CreateActivityPage> {
                   const SizedBox(width: 12),
                   GestureDetector(
                     onTap: () async {
-                      final picked = await showDialog<Color>(
+                      final c = await showDialog<Color>(
                         context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text('Choisir une couleur'),
-                          content: Wrap(
-                            spacing: 8, runSpacing: 8,
-                            children: [
-                              for (final c in [
-                                Colors.indigo, Colors.blue, Colors.teal,
-                                Colors.green, Colors.orange, Colors.pink, Colors.purple,
-                              ])
-                                InkWell(
-                                  onTap: () => Navigator.pop(ctx, c),
-                                  child: Container(
-                                    width: 28, height: 28,
-                                    decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
+                        builder: (_) => _ColorPickerDialog(initial: _color),
                       );
-                      if (picked != null) setState(() => _color = picked);
+                      if (c != null) setState(() => _color = c);
                     },
-                    child: Container(
-                      width: 24, height: 24,
-                      decoration: BoxDecoration(
-                        color: _color, shape: BoxShape.circle,
-                        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-                      ),
-                    ),
+                    child: CircleAvatar(backgroundColor: _color),
                   ),
                 ],
               ),
-              const Spacer(),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(onPressed: _save, child: const Text('Créer')),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                icon: const Icon(Icons.save),
+                label: const Text('Créer'),
+                onPressed: () async {
+                  if (!_form.currentState!.validate()) return;
+                  await db.createActivity(
+                    name: _nameCtrl.text.trim(),
+                    emoji: _emoji,
+                    colorValue: _color.value,
+                  );
+                  if (mounted) Navigator.of(context).pop();
+                },
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ColorPickerDialog extends StatefulWidget {
+  const _ColorPickerDialog({required this.initial});
+  final Color initial;
+  @override
+  State<_ColorPickerDialog> createState() => _ColorPickerDialogState();
+}
+class _ColorPickerDialogState extends State<_ColorPickerDialog> {
+  late Color _current = widget.initial;
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Choisir une couleur'),
+      content: SizedBox(
+        width: 280,
+        child: Wrap(
+          spacing: 8, runSpacing: 8,
+          children: [
+            const Color(0xFF6C63FF),
+            const Color(0xFFFF6B6B),
+            const Color(0xFF00C2A8),
+            const Color(0xFFFFC107),
+            const Color(0xFF00BCD4),
+            const Color(0xFF8BC34A),
+            const Color(0xFF9C27B0),
+          ].map((c) => GestureDetector(
+            onTap: () => setState(() => _current = c),
+            child: CircleAvatar(
+              radius: 18, backgroundColor: c,
+              child: _current.value == c.value ? const Icon(Icons.check) : null,
+            ),
+          )).toList(),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop<Color>(context), child: const Text('Annuler')),
+        FilledButton(onPressed: () => Navigator.pop<Color>(context, _current), child: const Text('OK')),
+      ],
     );
   }
 }

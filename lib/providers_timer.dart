@@ -1,30 +1,16 @@
-import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'providers.dart';
+import '../services/database_service_contract.dart';
 
-final elapsedStreamProvider =
-StreamProvider.family<Duration, String>((ref, activityUid) {
-  final db = ref.read(dbProvider);
-  return Stream.periodic(
-    const Duration(seconds: 1),
-        (_) => db.runningElapsedNow(activityId: activityUid),
-  );
+final dbProvider = Provider<DatabaseService>((ref) {
+  throw UnimplementedError('Provide a DatabaseService via ProviderScope(overrides: [...])');
 });
 
-final isRunningStreamProvider =
-StreamProvider.family<bool, String>((ref, activityUid) {
-  final db = ref.read(dbProvider);
-  return Stream.periodic(
-    const Duration(seconds: 1),
-        (_) => db.isRunningNow(activityId: activityUid),
-  );
+final elapsedStreamProvider = StreamProvider.family<Duration, String>((ref, activityUid) {
+  return ref.read(dbProvider).runningElapsedNow(activityUid);
 });
-
-final isPausedStreamProvider =
-StreamProvider.family<bool, String>((ref, activityUid) {
-  final db = ref.read(dbProvider);
-  return Stream.periodic(
-    const Duration(seconds: 1),
-        (_) => db.isPausedNow(activityId: activityUid),
-  );
+final isRunningProvider = StreamProvider.family<bool, String>((ref, activityUid) {
+  return ref.read(dbProvider).isRunningNow(activityUid);
+});
+final isPausedProvider = StreamProvider.family<bool, String>((ref, activityUid) {
+  return ref.read(dbProvider).isPausedNow(activityUid);
 });

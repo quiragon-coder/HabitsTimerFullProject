@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../providers.dart';
-import '../providers_timer.dart';
+import '../providers/providers_timer.dart';
 
 class ActivityControls extends ConsumerWidget {
   const ActivityControls({super.key, required this.activityId});
@@ -10,35 +8,30 @@ class ActivityControls extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Les providers prennent un uid (String)
-    final activityUid = activityId.toString();
-    final running =
-        ref.watch(isRunningStreamProvider(activityUid)).value ?? false;
-    final paused =
-        ref.watch(isPausedStreamProvider(activityUid)).value ?? false;
+    final db = ref.watch(dbProvider);
+    final uid = activityId.toString();
+    final running = ref.watch(isRunningProvider(uid)).maybeWhen(data: (v)=>v, orElse: ()=>false);
+    final paused = ref.watch(isPausedProvider(uid)).maybeWhen(data: (v)=>v, orElse: ()=>false);
 
     return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         FilledButton.icon(
-          onPressed: () async {
-            final db = ref.read(dbProvider);
-            if (!running) {
-              // DatabaseService attend un String pour activityId
-              await db.start(activityId: activityUid);
-            } else {
-              await db.togglePause(activityId: activityUid);
-            }
-          },
-          icon: const Icon(Icons.pause),
-          label: Text(paused ? 'Reprendre' : (running ? 'Pause' : 'Démarrer')),
+          onPressed: running ? null : () => db.start(activityId),
+          icon: const Icon(Icons.play_arrow),
+          label: const Text('Start'),
         ),
         const SizedBox(width: 12),
-        OutlinedButton.icon(
-          onPressed: running
-              ? () async => ref.read(dbProvider).stop(activityId: activityUid)
-              : null,
+        FilledButton.icon(
+          onPressed: running ? () => db.togglePause(activityId) : null,
+          icon: Icon(paused ? Icons.play_circle : Icons.pause),
+          label: Text(paused ? 'Resume' : 'Pause'),
+        ),
+        const SizedBox(width: 12),
+        FilledButton.icon(
+          onPressed: running ? () => db.stop(activityId) : null,
           icon: const Icon(Icons.stop),
-          label: const Text('Arrêter'),
+          label: const Text('Stop'),
         ),
       ],
     );
