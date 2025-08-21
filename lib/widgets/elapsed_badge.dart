@@ -1,51 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:habits_timer/providers_timer.dart';
+
+import '../providers_timer.dart';
 
 class ElapsedBadge extends ConsumerWidget {
-  final String activityId;
   const ElapsedBadge({super.key, required this.activityId});
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final asyncElapsed = ref.watch(runningElapsedProvider(activityId));
+  final int activityId;
 
-    return asyncElapsed.when(
-      data: (d) => _chip(_format(d)),
-      loading: () => _chip('—'),
-      error: (_, __) => _chip('—'),
-    );
-  }
-
-  Widget _chip(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.blue.withOpacity(.12),
-        border: Border.all(color: Colors.blue.withOpacity(.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.timer, size: 16),
-          const SizedBox(width: 6),
-          Text(text, style: const TextStyle(fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
-
-  String _format(Duration d) {
-    final s = d.inSeconds % 60;
-    final m = d.inMinutes % 60;
+  String _fmt(Duration d) {
     final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60);
     if (h > 0) {
       return '${h.toString().padLeft(2, '0')}:'
           '${m.toString().padLeft(2, '0')}:'
           '${s.toString().padLeft(2, '0')}';
     }
-    return '${m.toString().padLeft(2, '0')}:'
-        '${s.toString().padLeft(2, '0')}';
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final elapsed = ref.watch(runningElapsedProvider(activityId));
+
+    return elapsed.when(
+      data: (d) => Chip(label: Text(_fmt(d))),
+      loading: () => const Chip(label: Text('--:--')),
+      error: (_, __) => const Chip(label: Text('00:00')),
+    );
   }
 }

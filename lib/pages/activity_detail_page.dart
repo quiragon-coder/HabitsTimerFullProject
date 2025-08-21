@@ -2,92 +2,51 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/activity.dart';
-import '../providers.dart';
-import '../providers_timer.dart';
-
-import '../widgets/activity_controls.dart';
 import '../widgets/elapsed_badge.dart';
-import '../widgets/activity_stats_panel.dart';
+import '../widgets/activity_controls.dart';
 import '../widgets/mini_heatmap.dart';
-import '../widgets/activity_history.dart';
 
-class ActivityDetailPage extends ConsumerStatefulWidget {
-  const ActivityDetailPage({
-    super.key,
-    required this.activity,
-  });
+class ActivityDetailPage extends ConsumerWidget {
+  const ActivityDetailPage({super.key, required this.activity});
 
   final Activity activity;
 
   @override
-  ConsumerState<ActivityDetailPage> createState() => _ActivityDetailPageState();
-}
-
-class _ActivityDetailPageState extends ConsumerState<ActivityDetailPage> {
-  @override
-  Widget build(BuildContext context) {
-    final db = ref.watch(dbProvider);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final color = Color(activity.colorValue);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.activity.name),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12.0),
-            child: Center(
-              child: ElapsedBadge(activityId: widget.activity.id),
+        title: Row(
+          children: [
+            Text(activity.emoji, style: const TextStyle(fontSize: 20)),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                activity.name,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
+        backgroundColor: color.withOpacity(0.1),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Contrôles
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: ActivityControls(
-                activityId: widget.activity.id,
-              ),
-            ),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ElapsedBadge(activityId: activity.id),
+              ActivityControls(activityId: activity.id),
+            ],
           ),
-
-          const SizedBox(height: 12),
-
-          // Historique
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: ActivityHistory(
-                activityId: widget.activity.id,
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // Statistiques
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: ActivityStatsPanel(
-                activityId: widget.activity.id,
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // Mini heatmap
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: MiniHeatmap(
-                activityId: widget.activity.id,
-              ),
-            ),
-          ),
+          const SizedBox(height: 16),
+          MiniHeatmap(activityId: activity.id, days: 30),
+          const SizedBox(height: 16),
+          // Ajoute ici tes autres panneaux (stats / historique) quand prêts.
         ],
       ),
     );
