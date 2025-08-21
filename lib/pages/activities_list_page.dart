@@ -161,7 +161,8 @@ class _ActivityTileState extends ConsumerState<_ActivityTile> {
             alignment: MainAxisAlignment.start,
             spacing: 8,
             overflowSpacing: 8,
-            children: [ActivityControls(activityId: widget.a.id, compact: true)],
+            children: [ActivityControls(activityId: widget.a.id)],
+
           ),
         ],
       ),

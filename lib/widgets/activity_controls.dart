@@ -1,101 +1,82 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers.dart'; // dbProvider
 
-class ActivityControls extends ConsumerStatefulWidget {
-  final String activityId;
-  final bool compact;
+import '../providers.dart';
+import '../providers_timer.dart';
 
+class ActivityControls extends ConsumerWidget {
   const ActivityControls({
     super.key,
     required this.activityId,
-    this.compact = false,
   });
 
+  final dynamic activityId;
+
   @override
-  ConsumerState<ActivityControls> createState() => _ActivityControlsState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isRunning = ref.watch(isRunningProvider(activityId));
+    final isPaused  = ref.watch(isPausedProvider(activityId));
+
+    return Row(
+      children: [
+        // Pause / Reprendre
+        FilledButton.icon(
+          onPressed: () async {
+            await ref.read(dbProvider).togglePause(activityId);
+          },
+          icon: const Icon(Icons.pause),
+          label: isPaused.when(
+            data: (p) => Text(p ? 'Reprendre' : 'Pause'),
+            loading: () => const Text('...'),
+            error: (_, __) => const Text('Pause'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        // Arrêter
+        OutlinedButton.icon(
+          onPressed: () async {
+            await ref.read(dbProvider).stop(activityId);
+          },
+          icon: const Icon(Icons.stop),
+          label: const Text('Arrêter'),
+        ),
+        const Spacer(),
+        // Badge temps écoulé
+        isRunning.when(
+          data: (running) {
+            if (!running) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _LiveElapsed(activityId: activityId),
+            );
+          },
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
 }
 
-class _ActivityControlsState extends ConsumerState<ActivityControls> {
-  Future<void> _start() async {
-    final db = ref.read(dbProvider);
-    await db.start(widget.activityId);          // ⬅ utilise start(...)
-    if (mounted) setState(() {});               // petite secousse UI
-  }
-
-  Future<void> _togglePause() async {
-    final db = ref.read(dbProvider);
-    if (!db.isRunning(widget.activityId)) return;
-    await db.togglePause(widget.activityId);    // ⬅ utilise togglePause(...)
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _stop() async {
-    final db = ref.read(dbProvider);
-    if (!db.isRunning(widget.activityId)) return;
-    await db.stop(widget.activityId);           // ⬅ utilise stop(...)
-    if (mounted) setState(() {});
-  }
+class _LiveElapsed extends ConsumerWidget {
+  const _LiveElapsed({required this.activityId});
+  final dynamic activityId;
 
   @override
-  Widget build(BuildContext context) {
-    // IMPORTANT : watch (et non read) pour reconstruire quand notifyListeners() est appelé.
-    final db = ref.watch(dbProvider);
-
-    final running = db.isRunning(widget.activityId);
-    final paused  = db.isPaused(widget.activityId);
-
-    final pad = widget.compact ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
-        : const EdgeInsets.symmetric(horizontal: 12, vertical: 10);
-
-    // Boutons en fonction de l’état:
-    // - non démarré : [Démarrer]
-    // - démarré & en cours : [Pause] [Arrêter]
-    // - démarré & en pause : [Reprendre] [Arrêter]
-    List<Widget> buttons;
-    if (!running) {
-      buttons = [
-        FilledButton.icon(
-          onPressed: _start,
-          icon: const Icon(Icons.play_arrow),
-          label: const Text('Démarrer'),
-        ),
-      ];
-    } else if (paused) {
-      buttons = [
-        FilledButton.icon(
-          onPressed: _togglePause,
-          icon: const Icon(Icons.play_arrow),
-          label: const Text('Reprendre'),
-        ),
-        OutlinedButton.icon(
-          onPressed: _stop,
-          icon: const Icon(Icons.stop),
-          label: const Text('Arrêter'),
-        ),
-      ];
-    } else {
-      buttons = [
-        FilledButton.icon(
-          onPressed: _togglePause,
-          icon: const Icon(Icons.pause),
-          label: const Text('Pause'),
-        ),
-        OutlinedButton.icon(
-          onPressed: _stop,
-          icon: const Icon(Icons.stop),
-          label: const Text('Arrêter'),
-        ),
-      ];
-    }
-
-    return Padding(
-      padding: pad,
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: buttons,
-      ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final elapsed = ref.watch(runningElapsedProvider(activityId));
+    return elapsed.when(
+      data: (d) => Text(_fmt(d),
+          style: Theme.of(context).textTheme.labelLarge),
+      loading: () => const Text('00:00'),
+      error: (e, _) => Text('—', style: TextStyle(color: Colors.red.shade300)),
     );
+  }
+
+  String _fmt(Duration d) {
+    final mm = (d.inMinutes % 60).toString().padLeft(2, '0');
+    final ss = (d.inSeconds % 60).toString().padLeft(2, '0');
+    final hh = d.inHours;
+    return hh > 0 ? '$hh:$mm:$ss' : '$mm:$ss';
   }
 }

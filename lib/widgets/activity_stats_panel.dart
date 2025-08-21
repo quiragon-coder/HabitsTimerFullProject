@@ -1,12 +1,10 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:habits_timer/providers_stats.dart';
 
 class ActivityStatsPanel extends ConsumerWidget {
   final String activityId;
-  final int lastDays; // pour la section "derniers N jours"
-
+  final int lastDays;
   const ActivityStatsPanel({
     super.key,
     required this.activityId,
@@ -16,14 +14,12 @@ class ActivityStatsPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final today = ref.watch(minutesTodayProvider(activityId));
-    final week = ref.watch(minutesThisWeekProvider(activityId));
+    final week  = ref.watch(minutesThisWeekProvider(activityId));
     final month = ref.watch(minutesThisMonthProvider(activityId));
-    final year = ref.watch(minutesThisYearProvider(activityId));
+    final year  = ref.watch(minutesThisYearProvider(activityId));
 
     final lastNDays = ref.watch(
-      lastNDaysProvider(
-        LastNDaysArgs(activityId: activityId, days: lastDays),
-      ),
+      lastNDaysProvider(LastNDaysArgs(activityId: activityId, days: lastDays)),
     );
 
     return Card(
@@ -36,8 +32,10 @@ class ActivityStatsPanel extends ConsumerWidget {
             const Text('Statistiques', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            // <-- Wrap au lieu de Row pour éviter l'overflow
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 _StatChip(label: 'Aujourd\'hui', value: today),
                 _StatChip(label: 'Semaine', value: week),
@@ -46,11 +44,17 @@ class ActivityStatsPanel extends ConsumerWidget {
               ],
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Text('Derniers $lastDays jours', style: Theme.of(context).textTheme.titleMedium),
 
             lastNDays.when(
               data: (list) {
+                if (list.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Text('Pas encore de données.'),
+                  );
+                }
                 final total = list.fold<int>(0, (sum, d) => sum + d.minutes);
                 return Padding(
                   padding: const EdgeInsets.only(top: 6),
@@ -61,7 +65,7 @@ class ActivityStatsPanel extends ConsumerWidget {
                 padding: EdgeInsets.only(top: 8),
                 child: LinearProgressIndicator(),
               ),
-              error: (e, st) => Padding(
+              error: (e, _) => Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text('Erreur: $e'),
               ),
@@ -76,7 +80,6 @@ class ActivityStatsPanel extends ConsumerWidget {
 class _StatChip extends StatelessWidget {
   final String label;
   final AsyncValue<int> value;
-
   const _StatChip({required this.label, required this.value});
 
   @override
