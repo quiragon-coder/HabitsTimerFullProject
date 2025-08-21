@@ -1,17 +1,39 @@
 ﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:habits_timer/providers.dart'; // dbProvider, maybe activity provider, etc.
-import 'package:habits_timer/services/stats_service.dart';
-import 'package:habits_timer/services/stats_heatmap_extension.dart';
 
-/// Map<DateTime, int> des minutes par jour pour la période affichée par le heatmap.
-final heatmapProvider = FutureProvider.family<Map<DateTime, int>, String>((ref, activityId) {
-  final db = ref.read(dbProvider);
-  final stats = StatsService(db);
+import 'providers_stats.dart';
+import 'services/stats_service.dart';
 
-  final now = DateTime.now();
-  // Exemple: sur 90 jours glissants
-  final from = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 89));
-  final to = DateTime(now.year, now.month, now.day);
+class HeatmapArgs {
+  final String activityId;
+  final DateTime from;
+  final DateTime to;
 
-  return stats.dailyMinutesRange(activityId: activityId, from: from, to: to);
+  const HeatmapArgs({
+    required this.activityId,
+    required this.from,
+    required this.to,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+          other is HeatmapArgs &&
+              runtimeType == other.runtimeType &&
+              activityId == other.activityId &&
+              from == other.from &&
+              to == other.to;
+
+  @override
+  int get hashCode => Object.hash(activityId, from, to);
+}
+
+/// Map<DateTime, int> pour alimenter la heatmap
+final heatmapProvider =
+FutureProvider.family<Map<DateTime, int>, HeatmapArgs>((ref, args) async {
+  final StatsService stats = ref.read(statsProvider);
+  return stats.dailyMinutesRange(
+    args.activityId, // <- positionnel
+    from: args.from,
+    to: args.to,
+  );
 });

@@ -7,7 +7,8 @@ import '../providers_timer.dart';
 class ActivityControls extends ConsumerWidget {
   const ActivityControls({super.key, required this.activityId});
 
-  final int activityId;
+  /// UID String de l'activité
+  final String activityId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

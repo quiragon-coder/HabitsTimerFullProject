@@ -5,6 +5,7 @@ import '../models/activity.dart';
 import '../widgets/elapsed_badge.dart';
 import '../widgets/activity_controls.dart';
 import '../widgets/mini_heatmap.dart';
+import '../widgets/activity_stats_panel.dart';
 
 class ActivityDetailPage extends ConsumerWidget {
   const ActivityDetailPage({super.key, required this.activity});
@@ -13,7 +14,7 @@ class ActivityDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final color = Color(activity.colorValue);
+    final color = activity.color;
 
     return Scaffold(
       appBar: AppBar(
@@ -21,15 +22,10 @@ class ActivityDetailPage extends ConsumerWidget {
           children: [
             Text(activity.emoji, style: const TextStyle(fontSize: 20)),
             const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                activity.name,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
+            Flexible(child: Text(activity.name, overflow: TextOverflow.ellipsis)),
           ],
         ),
-        backgroundColor: color.withOpacity(0.1),
+        backgroundColor: color.withValues(alpha: 0.1),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -44,9 +40,9 @@ class ActivityDetailPage extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 16),
-          MiniHeatmap(activityId: activity.id, days: 30),
+          ActivityStatsPanel(activityId: activity.id),
           const SizedBox(height: 16),
-          // Ajoute ici tes autres panneaux (stats / historique) quand prêts.
+          MiniHeatmap(activityId: activity.id, days: 30),
         ],
       ),
     );

@@ -6,7 +6,8 @@ import '../providers_timer.dart';
 class ElapsedBadge extends ConsumerWidget {
   const ElapsedBadge({super.key, required this.activityId});
 
-  final int activityId;
+  /// UID String de l'activité
+  final String activityId;
 
   String _fmt(Duration d) {
     final h = d.inHours;

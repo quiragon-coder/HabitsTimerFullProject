@@ -1,75 +1,39 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:habits_timer/providers_stats.dart';
+
+import '../providers_stats.dart';
 
 class ActivityStatsPanel extends ConsumerWidget {
+  const ActivityStatsPanel({super.key, required this.activityId});
+
   final String activityId;
-  final int lastDays;
-  const ActivityStatsPanel({
-    super.key,
-    required this.activityId,
-    this.lastDays = 30,
-  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final today = ref.watch(minutesTodayProvider(activityId));
-    final week  = ref.watch(minutesThisWeekProvider(activityId));
-    final month = ref.watch(minutesThisMonthProvider(activityId));
-    final year  = ref.watch(minutesThisYearProvider(activityId));
+    final today  = ref.watch(minutesTodayProvider(activityId));
+    final week   = ref.watch(minutesThisWeekProvider(activityId));
+    final month  = ref.watch(minutesThisMonthProvider(activityId));
+    final year   = ref.watch(minutesThisYearProvider(activityId));
 
-    final lastNDays = ref.watch(
-      lastNDaysProvider(LastNDaysArgs(activityId: activityId, days: lastDays)),
-    );
+    Widget tile(String label, AsyncValue<int> v) {
+      return v.when(
+        data: (m) => _StatChip(label: label, minutes: m),
+        loading: () => const _StatChip(label: '…', minutes: null),
+        error: (_, __) => const _StatChip(label: '—', minutes: null),
+      );
+    }
 
     return Card(
-      margin: const EdgeInsets.all(12),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
-            const Text('Statistiques', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-
-            // <-- Wrap au lieu de Row pour éviter l'overflow
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _StatChip(label: 'Aujourd\'hui', value: today),
-                _StatChip(label: 'Semaine', value: week),
-                _StatChip(label: 'Mois', value: month),
-                _StatChip(label: 'Année', value: year),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-            Text('Derniers $lastDays jours', style: Theme.of(context).textTheme.titleMedium),
-
-            lastNDays.when(
-              data: (list) {
-                if (list.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.only(top: 6),
-                    child: Text('Pas encore de données.'),
-                  );
-                }
-                final total = list.fold<int>(0, (sum, d) => sum + d.minutes);
-                return Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text('Total: $total min'),
-                );
-              },
-              loading: () => const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: LinearProgressIndicator(),
-              ),
-              error: (e, _) => Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text('Erreur: $e'),
-              ),
-            ),
+            tile('Aujourd\'hui', today),
+            tile('Semaine', week),
+            tile('Mois', month),
+            tile('Année', year),
           ],
         ),
       ),
@@ -78,16 +42,18 @@ class ActivityStatsPanel extends ConsumerWidget {
 }
 
 class _StatChip extends StatelessWidget {
+  const _StatChip({required this.label, required this.minutes});
+
   final String label;
-  final AsyncValue<int> value;
-  const _StatChip({required this.label, required this.value});
+  final int? minutes;
 
   @override
   Widget build(BuildContext context) {
-    return value.when(
-      data: (v) => Chip(label: Text('$label: ${v}m')),
-      loading: () => const Chip(label: Text('...')),
-      error: (e, st) => Chip(label: Text('$label: -')),
+    final text = minutes == null ? '—' : '${minutes}m';
+    return Chip(
+      label: Text('$label: $text'),
+      backgroundColor:
+      Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.25),
     );
   }
 }

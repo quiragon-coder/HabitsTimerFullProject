@@ -3,54 +3,36 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'providers.dart';
 
-/// Emits the elapsed time for the running session of [activityId],
-/// refreshed every second.
+/// Stream<Duration> qui “tique” chaque seconde avec la durée courante.
 final runningElapsedProvider =
-StreamProvider.family<Duration, int>((ref, activityId) {
-  final db = ref.read(dbProvider);
+StreamProvider.family<Duration, String>((ref, activityId) {
+  final db = ref.watch(dbProvider);
+  // un tick immédiat puis toutes les secondes
+  return Stream<Duration>.periodic(const Duration(seconds: 1), (_) {
+    return db.runningElapsed(activityId);
+  }).startWith(db.runningElapsed(activityId));
+});
 
-  final controller = StreamController<Duration>();
-  Timer? timer;
+/// Stream<bool> qui “tique” chaque seconde avec l’état running
+final isRunningProvider = StreamProvider.family<bool, String>((ref, activityId) {
+  final db = ref.watch(dbProvider);
+  return Stream<bool>.periodic(const Duration(seconds: 1), (_) {
+    return db.isRunning(activityId);
+  }).startWith(db.isRunning(activityId));
+});
 
-  Future<void> emit() async {
-    try {
-      // Database API expected to be: Future<Duration> runningElapsed(int activityId)
-      final d = await db.runningElapsed(activityId);
-      controller.add(d);
-    } catch (_) {
-      // keep alive even if DB throws temporarily
-    }
+/// Stream<bool> pour l’état paused
+final isPausedProvider = StreamProvider.family<bool, String>((ref, activityId) {
+  final db = ref.watch(dbProvider);
+  return Stream<bool>.periodic(const Duration(seconds: 1), (_) {
+    return db.isPaused(activityId);
+  }).startWith(db.isPaused(activityId));
+});
+
+/// Petit utilitaire pour démarrer un stream avec une valeur immédiate.
+extension _StartWith<T> on Stream<T> {
+  Stream<T> startWith(T value) async* {
+    yield value;
+    yield* this;
   }
-
-  controller.onListen = () {
-    emit(); // immediate value
-    timer = Timer.periodic(const Duration(seconds: 1), (_) => emit());
-  };
-
-  controller.onCancel = () {
-    timer?.cancel();
-  };
-
-  ref.onDispose(() {
-    timer?.cancel();
-    controller.close();
-  });
-
-  return controller.stream.distinct();
-});
-
-/// True while the activity is started, refreshed every second.
-final isRunningProvider = StreamProvider.family<bool, int>((ref, activityId) {
-  final db = ref.read(dbProvider);
-  return Stream<bool>.periodic(const Duration(seconds: 1))
-      .asyncMap((_) => db.isRunning(activityId))
-      .distinct();
-});
-
-/// True while the activity is paused, refreshed every second.
-final isPausedProvider = StreamProvider.family<bool, int>((ref, activityId) {
-  final db = ref.read(dbProvider);
-  return Stream<bool>.periodic(const Duration(seconds: 1))
-      .asyncMap((_) => db.isPaused(activityId))
-      .distinct();
-});
+}
