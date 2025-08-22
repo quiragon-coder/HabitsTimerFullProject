@@ -1,4 +1,5 @@
 import 'package:isar/isar.dart';
+
 part 'activity_entity.g.dart';
 
 @collection

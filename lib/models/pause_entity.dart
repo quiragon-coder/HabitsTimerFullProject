@@ -1,4 +1,5 @@
 import 'package:isar/isar.dart';
+
 part 'pause_entity.g.dart';
 
 @collection
