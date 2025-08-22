@@ -144,7 +144,7 @@ import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:habits_timer/models/stats.dart";
 import "package:habits_timer/services/database_service.dart";
 import "package:habits_timer/services/stats_service.dart";
-import "providers.dart";
+import "../providers.dart";
 
 final statsServiceProvider = Provider<StatsService>((ref) {
   final db = ref.read(dbProvider);

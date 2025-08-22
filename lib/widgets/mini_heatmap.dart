@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/providers_heatmap.dart';
+import '../providers_heatmap.dart';
 
 class MiniHeatmap extends ConsumerWidget {
   const MiniHeatmap({

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/providers_timer.dart';
-import '../services/database_service_contract.dart';
+import '../providers_timer.dart';
+import '/services/database_service_contract.dart';
 
 class ActivityHistoryPage extends ConsumerStatefulWidget {
   const ActivityHistoryPage({super.key, required this.activityId, required this.activityName});

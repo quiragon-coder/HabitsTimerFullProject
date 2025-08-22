@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../services/database_service_contract.dart';
-import '../providers/providers_timer.dart';
-import '../widgets/elapsed_badge.dart';
-import '../widgets/activity_controls.dart';
-import '../widgets/mini_heatmap.dart';
+import '/services/database_service_contract.dart';
+import '../providers_timer.dart';
+import '/widgets/elapsed_badge.dart';
+import '/widgets/activity_controls.dart';
+import '/widgets/mini_heatmap.dart';
 import 'activity_history_page.dart';
 
 class ActivityDetailPage extends ConsumerWidget {

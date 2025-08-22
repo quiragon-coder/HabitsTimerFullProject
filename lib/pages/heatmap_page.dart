@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../providers_stats.dart';
+import '../providers_heatmap.dart';
 import '../widgets/heatmap.dart';
 
 class HeatmapPage extends ConsumerWidget {

@@ -14,14 +14,18 @@ class IsarDatabaseService implements DatabaseService {
   static Future<IsarDatabaseService> create() async {
     final dir = await pp.getApplicationDocumentsDirectory();
     final isar = await Isar.open(
-      schemas: [ActivityEntitySchema, SessionEntitySchema, PauseEntitySchema],
-      directory: dir.path,
-      name: 'habits_timer',
-    );
-    return IsarDatabaseService._(isar);
-  }
+        static Future<IsarDatabaseService> create() async {
+      final dir = await pp.getApplicationDocumentsDirectory();
+      final isar = await Isar.open(
+        [ActivityEntitySchema, SessionEntitySchema, PauseEntitySchema], // <-- positionnel en v3
+        directory: dir.path,
+        name: 'habits_timer',
+      );
+      return IsarDatabaseService._(isar);
+    }
 
-  // ---------- Helpers mapping ----------
+
+    // ---------- Helpers mapping ----------
   Activity _toActivity(ActivityEntity e) => Activity(
         id: e.id,
         name: e.name,

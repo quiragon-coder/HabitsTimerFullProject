@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/providers_timer.dart';
+import '../providers_timer.dart';
+
 
 class ElapsedBadge extends ConsumerWidget {
   const ElapsedBadge({super.key, required this.activityId});

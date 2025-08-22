@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/providers_timer.dart';
+import '../providers_timer.dart';
+
 
 class ActivityControls extends ConsumerWidget {
   const ActivityControls({super.key, required this.activityId});
